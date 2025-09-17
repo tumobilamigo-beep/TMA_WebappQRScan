@@ -12,12 +12,18 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
             background-color: #f0f2f5;
             color: #333;
             text-align: center;
             padding: 20px;
+            box-sizing: border-box;
+        }
+        h1 {
+            color: #17a2b8;
+            font-size: 1.8em;
+            margin-bottom: 20px;
         }
         #reader {
             width: 90%;
@@ -29,40 +35,83 @@
         }
         #result {
             margin-top: 25px;
-            font-size: 1.2em;
+            font-size: 1.1em;
             font-weight: bold;
             color: #555;
-            padding: 10px;
+            padding: 15px;
             background-color: #e9ecef;
             border-radius: 8px;
+            transition: all 0.3s ease;
+            word-break: break-all;
         }
-        h1 {
-            color: #17a2b8;
+        #result.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        #result.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        /* Ocultar la opción de cargar archivo */
+        #html5-qrcode-anchor-scan-type-change,
+        #html5-qrcode-button-file-selection {
+            display: none !important;
+        }
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.5em;
+            }
+            #reader {
+                width: 100%;
+            }
+            #result {
+                font-size: 1em;
+                padding: 10px;
+            }
         }
     </style>
 </head>
 <body>
-
     <h1>Escanea el código QR</h1>
     <div id="reader"></div>
     <div id="result">Escaneando...</div>
-
     <script>
+        // Integración con Telegram WebApp
+        if (window.Telegram?.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+        }
+
         function onScanSuccess(decodedText, decodedResult) {
             console.log(`Código escaneado: ${decodedText}`);
-
+            const resultElement = document.getElementById('result');
             // Copia automáticamente al portapapeles
             navigator.clipboard.writeText(decodedText)
                 .then(() => {
-                    document.getElementById('result').innerText = `✅ QR copiado al portapapeles:\n${decodedText}`;
+                    resultElement.innerText = `✅ QR copiado al portapapeles:\n${decodedText}`;
+                    resultElement.classList.remove('error');
+                    resultElement.classList.add('success');
                     console.log("Texto copiado al portapapeles.");
+                    // Cierra la webapp después de un breve retraso
+                    setTimeout(() => {
+                        if (window.Telegram?.WebApp) {
+                            window.Telegram.WebApp.close();
+                        }
+                    }, 1000);
                 })
                 .catch(err => {
                     console.error("Error al copiar al portapapeles:", err);
-                    document.getElementById('result').innerText = `Error al copiar el QR.`;
+                    resultElement.innerText = `❌ Error al copiar el QR.`;
+                    resultElement.classList.remove('success');
+                    resultElement.classList.add('error');
+                    // Cierra la webapp incluso si hay error
+                    setTimeout(() => {
+                        if (window.Telegram?.WebApp) {
+                            window.Telegram.WebApp.close();
+                        }
+                    }, 1000);
                 });
-
-            // Detiene el escáner después del primer escaneo
+            // Detiene el escáner
             html5QrcodeScanner.clear().then(() => {
                 console.log("Escáner detenido.");
             }).catch(error => {
@@ -72,13 +121,28 @@
 
         function onScanFailure(error) {
             console.warn(`Error de escaneo: ${error}`);
+            const resultElement = document.getElementById('result');
+            if (error.includes('No MultiFormat Readers were able to detect the code')) {
+                resultElement.innerText = `Escaneando...`;
+            } else {
+                resultElement.innerText = `❌ Error: No se pudo acceder a la cámara trasera. Por favor, verifica los permisos.`;
+                resultElement.classList.remove('success');
+                resultElement.classList.add('error');
+            }
         }
 
-        // Inicializa el escáner
+        // Inicializa el escáner solo con la cámara trasera
         const html5QrcodeScanner = new Html5QrcodeScanner(
             "reader", {
                 fps: 10,
-                qrbox: { width: 250, height: 250 }
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0,
+                disableFlip: true,
+                videoConstraints: {
+                    facingMode: "environment"
+                },
+                // Deshabilita la carga de imágenes
+                supportImageFile: false
             },
             false
         );
