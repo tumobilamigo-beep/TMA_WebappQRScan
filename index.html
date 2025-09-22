@@ -57,6 +57,25 @@
             background-color: #f8d7da;
             color: #721c24;
         }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1em;
+            color: #fff;
+            background-color: #17a2b8;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: none; /* Oculto inicialmente */
+        }
+        button:hover {
+            background-color: #138496;
+        }
+        button:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(23, 162, 184, 0.3);
+        }
         @media (max-width: 600px) {
             h1 {
                 font-size: 1.5em;
@@ -75,6 +94,7 @@
     <h1>Escanea el código QR</h1>
     <div id="reader"></div>
     <div id="result">Escaneando...</div>
+    <button id="copyCloseButton">Copiar al portapapeles y Cerrar</button>
     <script>
         // Integración con Telegram WebApp
         if (window.Telegram?.WebApp) {
@@ -84,6 +104,7 @@
 
         const html5QrCode = new Html5Qrcode("reader");
         const resultElement = document.getElementById('result');
+        const copyCloseButton = document.getElementById('copyCloseButton');
         const config = {
             fps: 10,
             qrbox: { width: 250, height: 250 },
@@ -92,46 +113,54 @@
         const cameraConstraints = {
             facingMode: { exact: "environment" }  // Fuerza cámara trasera
         };
+        let decodedText = '';  // Para almacenar el texto escaneado
 
-        function onScanSuccess(decodedText, decodedResult) {
+        function onScanSuccess(decoded, decodedResult) {
+            decodedText = decoded;
             console.log(`Código escaneado: ${decodedText}`);
-            // Copia automáticamente al portapapeles
+            resultElement.innerText = `✅ QR escaneado correctamente:\n${decodedText}`;
+            resultElement.classList.remove('error');
+            resultElement.classList.add('success');
+
+            // Detiene el escáner
+            html5QrCode.stop().then(() => {
+                console.log("Escáner detenido.");
+                // Muestra el botón para copiar y cerrar (requiere interacción del usuario)
+                copyCloseButton.style.display = 'block';
+            }).catch(error => {
+                console.error("Error al detener el escáner:", error);
+                resultElement.innerText = `❌ Error al detener el escáner.`;
+                resultElement.classList.remove('success');
+                resultElement.classList.add('error');
+            });
+        }
+
+        // Evento para el botón: Copia y cierra
+        copyCloseButton.addEventListener('click', () => {
             navigator.clipboard.writeText(decodedText)
                 .then(() => {
-                    resultElement.innerText = `✅ QR copiado al portapapeles:\n${decodedText}`;
-                    resultElement.classList.remove('error');
-                    resultElement.classList.add('success');
                     console.log("Texto copiado al portapapeles.");
+                    resultElement.innerText = `✅ QR copiado al portapapeles:\n${decodedText}`;
+                    // Cierra la webapp después de 1 segundo
+                    setTimeout(() => {
+                        if (window.Telegram?.WebApp) {
+                            window.Telegram.WebApp.close();
+                        }
+                    }, 1000);
                 })
                 .catch(err => {
                     console.error("Error al copiar al portapapeles:", err);
                     resultElement.innerText = `❌ Error al copiar el QR:\n${decodedText}`;
                     resultElement.classList.remove('success');
                     resultElement.classList.add('error');
+                    // Cierra incluso en error después de 1 segundo
+                    setTimeout(() => {
+                        if (window.Telegram?.WebApp) {
+                            window.Telegram.WebApp.close();
+                        }
+                    }, 1000);
                 });
-
-            // Detiene el escáner
-            html5QrCode.stop().then(() => {
-                console.log("Escáner detenido.");
-                // Cierra la webapp después de 2 segundos para mostrar el mensaje
-                setTimeout(() => {
-                    if (window.Telegram?.WebApp) {
-                        window.Telegram.WebApp.close();
-                    }
-                }, 2000);
-            }).catch(error => {
-                console.error("Error al detener el escáner:", error);
-                resultElement.innerText = `❌ Error al detener el escáner.`;
-                resultElement.classList.remove('success');
-                resultElement.classList.add('error');
-                // Cierra incluso en error después de 2 segundos
-                setTimeout(() => {
-                    if (window.Telegram?.WebApp) {
-                        window.Telegram.WebApp.close();
-                    }
-                }, 2000);
-            });
-        }
+        });
 
         // Inicia el escáner
         html5QrCode.start(cameraConstraints, config, onScanSuccess)
@@ -139,7 +168,6 @@
                 console.error("Error al iniciar el escáner:", err);
                 resultElement.innerText = `❌ Error: No se pudo acceder a la cámara trasera. Verifica permisos y asegúrate de tener una cámara disponible.`;
                 resultElement.classList.add('error');
-                // No cierra automáticamente en error de inicio, permite al usuario ver el mensaje
             });
     </script>
 </body>
